@@ -87,18 +87,18 @@ const execWithLogs = (command, logs, timeout = 60000) =>
     });
   });
 
-  app.post('/create-portrait-video', async (req, res) => {
+app.post('/create-portrait-video', async (req, res) => {
     const { youtubeUrl, startTime, duration } = req.body;
-  
+
     if (!youtubeUrl || startTime === undefined || duration === undefined) {
-      return res.status(400).send({ message: 'Missing required parameters.' });
+        return res.status(400).send({ message: 'Missing required parameters.' });
     }
-  
+
     const videoId = youtubeUrl.split('v=')[1]?.split('&')[0];
     if (!videoId) {
-      return res.status(400).send({ message: 'Invalid YouTube URL.' });
+        return res.status(400).send({ message: 'Invalid YouTube URL.' });
     }
-  
+
     const downloadFolder = path.join(__dirname, 'downloads');
     const outputFolder = path.join(__dirname, 'outputs');
     const entertainmentVideoPath = path.join(__dirname, 'entertainment_video.mp4'); // Replace with valid path
@@ -106,66 +106,63 @@ const execWithLogs = (command, logs, timeout = 60000) =>
     const finalOutputPath = path.join(outputFolder, `${videoId}_portrait.mp4`);
     let logs = [];
     let downloadedFilePath = null;
-  
-    try {
-      // Step 1: Check if the file already exists
-      downloadedFilePath = path.join(downloadFolder, `${videoId}.webm`);
-      if (fs.existsSync(downloadedFilePath)) {
-        logs.push('File already exists in downloads. Using the existing file.');
-      } else {
-        // Step 2: Download the video
-        logs.push('Starting video download...');
-        const downloadCommand = `yt-dlp -o "${downloadFolder}/${videoId}.%(ext)s" -f "bestvideo+bestaudio/best" "${youtubeUrl}"`;
-        await execWithLogs(downloadCommand, logs);
-        logs.push('Video downloaded successfully.');
-  
-        // Ensure the downloaded file exists
-        if (!fs.existsSync(downloadedFilePath)) {
-          throw new Error('YouTube video download failed.');
-        }
-      }
-  
-      // Step 3: Cut the YouTube video
-      logs.push('Starting video cutting...');
-      const cutCommand = `ffmpeg -i "${downloadedFilePath}" -ss ${startTime} -t ${duration} -c copy "${cutVideoPath}"`;
-      await execWithLogs(cutCommand, logs);
-      logs.push('Video cutting completed.');
-  
-      if (!fs.existsSync(cutVideoPath)) {
-        throw new Error('Cut video file not created.');
-      }
-  
-      // Step 4: Combine videos into portrait layout
-      logs.push('Starting video combination into portrait layout...');
-      const combineCommand = `
-        ffmpeg \
-        -i "${cutVideoPath}" \
-        -i "${entertainmentVideoPath}" \
-        -filter_complex "[0:v:0]scale=640:360[vid1];[1:v:0]scale=640:360[vid2];[vid1][vid2]vstack=inputs=2" \
-        -c:v libx264 -crf 23 -preset veryfast \
-        -c:a aac -strict experimental \
-        "${finalOutputPath}"`;
-      await execWithLogs(combineCommand, logs);
-      logs.push('Video combination completed.');
-  
-      if (!fs.existsSync(finalOutputPath)) {
-        throw new Error('Portrait video file not created.');
-      }
-  
-      // Step 5: Send the final video
-      logs.push('Sending the final video...');
-      res.setHeader('X-Logs', encodeURIComponent(JSON.stringify(logs)));
-      res.download(finalOutputPath, `${videoId}_portrait.mp4`, () => {
-        fs.unlinkSync(cutVideoPath);
-        fs.unlinkSync(finalOutputPath);
-      });
-    } catch (error) {
-      logs.push(`Error: ${error.message}`);
-      res.status(500).send({ message: 'An error occurred.', logs });
-    }
-  });
-  
 
+    try {
+        // Step 1: Check if the file already exists
+        downloadedFilePath = path.join(downloadFolder, `${videoId}.webm`);
+        if (fs.existsSync(downloadedFilePath)) {
+            logs.push('File already exists in downloads. Using the existing file.');
+        } else {
+            // Step 2: Download the video
+            logs.push('Starting video download...');
+            const downloadCommand = `yt-dlp -o "${downloadFolder}/${videoId}.%(ext)s" -f "bestvideo+bestaudio/best" "${youtubeUrl}"`;
+            await execWithLogs(downloadCommand, logs);
+            logs.push('Video downloaded successfully.');
+
+            if (!fs.existsSync(downloadedFilePath)) {
+                throw new Error('YouTube video download failed.');
+            }
+        }
+
+        // Step 3: Cut the YouTube video
+        logs.push('Starting video cutting...');
+        const cutCommand = `ffmpeg -i "${downloadedFilePath}" -ss ${startTime} -t ${duration} -c copy "${cutVideoPath}"`;
+        await execWithLogs(cutCommand, logs);
+        logs.push('Video cutting completed.');
+
+        if (!fs.existsSync(cutVideoPath)) {
+            throw new Error('Cut video file not created.');
+        }
+
+        // Step 4: Combine videos into portrait layout
+        logs.push('Starting video combination into portrait layout...');
+        const combineCommand = `
+            ffmpeg \
+            -i "${cutVideoPath}" \
+            -i "${entertainmentVideoPath}" \
+            -filter_complex "[0:v:0]scale=640:360[vid1];[1:v:0]scale=640:360[vid2];[vid1][vid2]vstack=inputs=2:shortest=1" \
+            -c:v libx264 -crf 23 -preset veryfast \
+            -c:a aac -strict experimental \
+            "${finalOutputPath}"`;
+        await execWithLogs(combineCommand, logs);
+        logs.push('Video combination completed.');
+
+        if (!fs.existsSync(finalOutputPath)) {
+            throw new Error('Portrait video file not created.');
+        }
+
+        // Step 5: Send the final video
+        logs.push('Sending the final video...');
+        res.setHeader('X-Logs', encodeURIComponent(JSON.stringify(logs)));
+        res.download(finalOutputPath, `${videoId}_portrait.mp4`, () => {
+            fs.unlinkSync(cutVideoPath);
+            fs.unlinkSync(finalOutputPath);
+        });
+    } catch (error) {
+        logs.push(`Error: ${error.message}`);
+        res.status(500).send({ message: 'An error occurred.', logs });
+    }
+});
 
 // Endpoint to process video and add text
 app.post('/add-text-video', async (req, res) => {
