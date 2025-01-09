@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube to Shorts</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f4f4f4;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    input, button, select {
+      margin: 5px 0;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      width: 100%;
+    }
+    button {
+      background-color: #007BFF;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #log {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      width: 100%;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>YouTube to Shorts</h2>
+    <input type="text" id="youtubeUrl" placeholder="Enter YouTube Video URL">
+    <label for="startTime">Start Time (in seconds):</label>
+    <input type="number" id="startTime" placeholder="Start Time">
+    <label for="duration">Duration (in seconds):</label>
+    <input type="number" id="duration" placeholder="Duration">
+    <label for="videoType">Select Video Type:</label>
+    <select id="videoType">
+      <option value="cut">Cut Video</option>
+      <option value="portrait">Portrait Video</option>
+      <option value="text">Text Video</option>
+    </select>
+    <button id="processVideo">Generate and Download</button>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    document.getElementById("processVideo").addEventListener("click", async () => {
+      const youtubeUrl = document.getElementById("youtubeUrl").value;
+      const startTime = document.getElementById("startTime").value;
+      const duration = document.getElementById("duration").value;
+      const videoType = document.getElementById("videoType").value;
+      const log = document.getElementById("log");
+
+      if (!youtubeUrl || !startTime || !duration) {
+        alert("Please provide all inputs!");
+        return;
+      }
+
+      log.innerHTML = "<p>Processing your request...</p>";
+
+      try {
+        let endpoint;
+        switch (videoType) {
+          case "cut":
+            endpoint = "/cut-video";
+            break;
+          case "portrait":
+            endpoint = "/create-portrait-video";
+            break;
+          case "text":
+            endpoint = "/add-text-video";
+            break;
+          default:
+            throw new Error("Invalid video type selected.");
+        }
+
+        const response = await fetch(`http://localhost:3000${endpoint}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            youtubeUrl,
+            startTime,
+            duration,
+          }),
+        });
+
+        if (!response.ok) {
+          const { message, logs } = await response.json();
+          log.innerHTML += `<p style='color: red;'>${message}</p>`;
+          if (logs && Array.isArray(logs)) {
+            logs.forEach((line) => {
+              log.innerHTML += `<p>${line}</p>`;
+            });
+          }
+          throw new Error(message);
+        }
+
+        const logsHeader = response.headers.get("X-Logs");
+        if (logsHeader) {
+          const parsedLogs = JSON.parse(decodeURIComponent(logsHeader));
+          if (parsedLogs && Array.isArray(parsedLogs)) {
+            parsedLogs.forEach((line) => {
+              log.innerHTML += `<p>${line}</p>`;
+            });
+          }
+        }
+
+        log.innerHTML += "<p>Download started successfully.</p>";
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${videoType}_video.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } catch (error) {
+        log.innerHTML += `<p style='color: red;'>An error occurred: ${error.message}</p>`;
+        console.error(error);
+      }
+    });
+  </script>
+</body>
+</html>
